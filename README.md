@@ -21,7 +21,7 @@ npm run db:local
 npm start
 ```
 
-Abre http://127.0.0.1:8787. Mantén abierto el servidor. En otra consola, `npm run datos:demo` agrega seis solicitudes ficticias sin duplicarlas y `npm test` ejecuta 22 pruebas de integración. Los datos locales se conservan en `.wrangler/state`; no se pierden al cerrar el navegador.
+Abre http://127.0.0.1:8787. Mantén abierto el servidor. En otra consola, `npm run datos:demo` agrega seis solicitudes ficticias sin duplicarlas. Los datos locales se conservan en `.wrangler/state`; no se pierden al cerrar el navegador.
 
 `preparar` crea `.dev.vars` con una clave JWT y una contraseña aleatoria para esta copia. Muestra la contraseña inicial en la consola. No sobrescribe una configuración que ya existe. El archivo de ejemplo `.dev.vars.example` documenta las variables y no contiene claves de producción.
 
@@ -44,9 +44,7 @@ Ambas cuentas utilizan la contraseña inicial configurada en `DEMO_PASSWORD`. Se
 | worker/index.ts | Entrada del servidor y conexión con los archivos del frontend |
 | migrations | Esquema SQL y migraciones de D1 |
 | scripts | Preparación y datos ficticios |
-| tests | Pruebas HTTP de integración |
 | wrangler.jsonc | Configuración de Cloudflare y enlace de la base DB |
-| .github/workflows | Verificación automática del proyecto |
 
 El frontend envía peticiones Fetch al backend del mismo dominio. El servidor verifica la cookie JWT y el rol de la cuenta antes de ejecutar sentencias SQL con parámetros. Los cambios se agrupan con su registro de actividad mediante transacciones por lote de D1. Las fechas se guardan en ISO UTC y se muestran en horario de Ciudad de México.
 
@@ -80,11 +78,9 @@ Se necesita una cuenta de Cloudflare con Workers y D1 habilitados. La autorizaci
 
 Las variables `JWT_SECRET` y `DEMO_PASSWORD` se cargan como secretos de Cloudflare. Nunca se guardan sus valores en GitHub. `npm run deploy` verifica, compila y publica la aplicación. El resultado muestra la dirección real bajo workers.dev. No es necesario comprar un dominio. La base local y la de producción son independientes.
 
-Para automatizar futuras publicaciones, Cloudflare puede conectarse al repositorio de GitHub desde Workers & Pages. Configuración: rama main; comando de compilación `npm ci && npm run build`; comando de publicación `npx wrangler deploy`. Los permisos de esa conexión deben limitarse al repositorio del proyecto. Las migraciones nuevas se revisan y aplican antes de publicar cambios que las requieran.
-
 ## Evidencias de la entrega
 
-El documento Word, las capturas, el video y los resultados de las pruebas se entregan en la carpeta comprimida académica. Las pruebas cubren CRUD, datos inválidos, búsquedas, versiones, permisos, JWT inválido o vencido, origen externo y revocación al salir. El código del repositorio no incluye contraseñas de producción ni bases de datos con sesiones activas.
+El documento Word, las capturas y el video se entregan en la carpeta comprimida académica. La demostración muestra el inicio de sesión, el alta, la consulta, la modificación, la eliminación y la actividad reciente. También incluye las respuestas HTTP obtenidas durante el recorrido del frontend y una vista en móvil. El código del repositorio no incluye contraseñas de producción ni bases de datos con sesiones activas.
 
 ## Referencias
 
