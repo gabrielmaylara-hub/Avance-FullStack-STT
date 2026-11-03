@@ -1,0 +1,2 @@
+JWT_SECRET=generar_una_clave_aleatoria_de_al_menos_32_caracteres
+DEMO_PASSWORD=crear_una_contrasena_demo_de_al_menos_12_caracteres

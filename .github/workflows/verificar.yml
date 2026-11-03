@@ -1,0 +1,31 @@
+name: Verificar el proyecto
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - run: npm run preparar
+      - run: npm run db:local
+      - name: Iniciar servidor local y probar la API
+        shell: bash
+        run: |
+          npm start > servidor-pruebas.log 2>&1 &
+          for intento in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:8787/api/salud; then break; fi
+            sleep 1
+          done
+          npm test
