@@ -6,6 +6,8 @@
 
 Aplicación académica para administrar solicitudes ficticias de mantenimiento, soporte y redes. Integra operaciones CRUD, autenticación JWT, permisos por rol, historial de actividad y una base de datos D1 persistente. El frontend utiliza React, TypeScript y CSS; el backend se ejecuta en Cloudflare Workers. El código se conserva en GitHub y la aplicación se publica directamente en Cloudflare.
 
+**Aplicación publicada:** [Abrir el sistema STT](https://stt-avance-07229881.gabrielmaylara-07229881.workers.dev). El enlace presenta el inicio de sesión del sistema; las cuentas ficticias de evaluación se incluyen en la entrega académica. No se necesita una cuenta de Cloudflare para utilizarlo.
+
 ## Ejecución local
 
 Requisitos: Node.js 22.13 o posterior y npm. Desde la carpeta del proyecto:
