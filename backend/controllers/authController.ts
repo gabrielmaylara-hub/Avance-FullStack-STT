@@ -2,11 +2,11 @@ import { ApiError, body, json } from "../lib/http";
 import { hashPassword, verifyPassword, signJwt, sessionCookie, SESSION_SECONDS } from "../lib/security";
 import type { AppEnv } from "../middleware/auth";
 import type { Usuario } from "../models/solicitud";
-// Cuentas ficticias inicializadas con una contraseña configurada solo en el servidor.
+// Cuentas iniciales con una contraseña configurada en el servidor.
 async function ensureDemoUsers(env: AppEnv) {
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM usuarios").first<{ n: number }>();
   if (count?.n) return;
-  if (!env.DEMO_PASSWORD || env.DEMO_PASSWORD.length < 12) throw new ApiError(503, "Falta preparar las cuentas de demostración del servidor.");
+  if (!env.DEMO_PASSWORD || env.DEMO_PASSWORD.length < 12) throw new ApiError(503, "No fue posible preparar las cuentas de acceso. Contacta al administrador.");
   const now = new Date().toISOString(), adminHash = await hashPassword(env.DEMO_PASSWORD), techHash = await hashPassword(env.DEMO_PASSWORD);
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO usuarios (id,usuario,nombre,rol,password_hash,creado) VALUES (?,?,?,?,?,?)")

@@ -12,7 +12,7 @@ export function validateSolicitud(data: Record<string, unknown>): SolicitudInput
     return value;
   };
   const cliente = text("cliente", 7, 12).toUpperCase();
-  if (!/^CLI-\d{3,8}$/.test(cliente)) throw new ApiError(400, "Usa un cliente ficticio con formato CLI-001.");
+  if (!/^CLI-\d{3,8}$/.test(cliente)) throw new ApiError(400, "El código de cliente debe tener el formato CLI-001.");
   const categoria = text("categoria", 1, 30), prioridad = text("prioridad", 1, 15), estado = text("estado", 1, 15);
   if (!(CATEGORIAS as readonly string[]).includes(categoria)) throw new ApiError(400, "Selecciona una categoría válida.");
   if (!(PRIORIDADES as readonly string[]).includes(prioridad)) throw new ApiError(400, "Selecciona una prioridad válida.");
