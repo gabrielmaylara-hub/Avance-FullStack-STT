@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "stt-avance-07229881",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "78e9cfc4-abb1-47ec-9fdf-41264ff662c8",
       "migrations_dir": "migrations"
     }
   ],
