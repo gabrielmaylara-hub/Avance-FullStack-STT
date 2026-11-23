@@ -41,7 +41,7 @@ const menu = [
   { to: "/clima", titulo: "Clima para visitas", icono: CloudSun },
   { to: "/guia", titulo: "Guía del sistema", icono: CircleHelp }
 ];
-function Espacio({ usuario, salir }: { usuario: Usuario; salir: () => void }) {
+function Espacio({ usuario }: { usuario: Usuario }) {
   const location = useLocation();
   const nav = useNavigate();
   const [ocupado, trabajar] = useState(false);
@@ -66,7 +66,7 @@ function Espacio({ usuario, salir }: { usuario: Usuario; salir: () => void }) {
     trabajar(true);
     try {
       await api("/auth/logout", { method: "POST", body: "{}" });
-      nav("/ingreso", { replace: true }); salir();
+      window.location.replace("/ingreso");
     } catch (err) { informar(mensaje(err)); } finally { trabajar(false); }
   }
   const rol = usuario.rol === "administrador" ? "Administrador" : "Técnico";
@@ -108,7 +108,7 @@ function Aplicacion() {
   const destino = typeof regreso === "string" && /^\/(solicitudes|actividad|clima|guia)(\/|\?|$)/.test(regreso) ? regreso : "/solicitudes";
   return <Routes>
     <Route path="/ingreso" element={usuario ? <Navigate to={destino} replace/> : <Ingreso vencida={vencida} autenticar={u => { caducar(false); autenticar(u); }}/>}/>
-    <Route element={usuario ? <Espacio usuario={usuario} salir={() => { caducar(false); autenticar(null); }}/> :
+    <Route element={usuario ? <Espacio usuario={usuario}/> :
       <Navigate to="/ingreso" replace state={{ regreso: location.pathname + location.search }}/>}>
       <Route index element={<Navigate to="/solicitudes" replace/>}/>
       <Route path="/solicitudes" element={<Solicitudes/>}/>
