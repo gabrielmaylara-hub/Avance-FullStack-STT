@@ -1,16 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "jsx": "react-jsx",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "types": ["@cloudflare/workers-types", "node"]
+    "target": "ES2022", "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "jsx": "react-jsx", "module": "ESNext", "moduleResolution": "Bundler",
+    "strict": true, "noEmit": true, "skipLibCheck": true,
+    "esModuleInterop": true, "types": ["vite/client"]
   },
-  "include": ["frontend/**/*.ts", "frontend/**/*.tsx", "backend/**/*.ts", "worker/**/*.ts", "vite.config.ts"],
-  "exclude": ["node_modules", "dist", ".wrangler"]
+  "include": ["frontend/**/*.ts", "frontend/**/*.tsx"]
 }

@@ -1,90 +1,80 @@
-# Avance del proyecto Full Stack
+# Sistema de solicitudes de soporte · STT
 
-**Soluciones Tecnológicas de Tabasco**  
-**Alumno:** Lic. Gabriel Josué May Lara · **Matrícula:** 07229881  
-**Docente:** Mtro. Carlos Arturo Sánchez Rivera · **Materia:** Desarrollo Full Stack
-
-Aplicación para administrar solicitudes de mantenimiento, soporte y redes. Integra operaciones CRUD, autenticación JWT, permisos por rol, historial de actividad y una base de datos D1 persistente. El frontend utiliza React, TypeScript y CSS; el backend se ejecuta en Cloudflare Workers. El código se conserva en GitHub y la aplicación se publica directamente en Cloudflare.
-
-**Aplicación publicada:** [Abrir el sistema STT](https://stt-avance-07229881.gabrielmaylara-07229881.workers.dev). El enlace presenta el inicio de sesión del sistema; las cuentas de acceso se incluyen en la entrega. No se necesita una cuenta de Cloudflare para utilizarlo.
+Proyecto final de Desarrollo Full Stack de Gabriel Josué May Lara, matrícula 07229881. La aplicación continúa el avance de **Soluciones Tecnológicas de Tabasco**. Permite registrar solicitudes, asignar prioridad, actualizar su estado y revisar el historial de atención. El módulo de clima apoya la programación de visitas en Villahermosa. Los casos y cuentas son ficticios.
 
 ## Ejecución local
 
-Requisitos: Node.js 22.13 o posterior y npm. Desde la carpeta del proyecto:
+Instala Node.js 22.13 o posterior. En la carpeta que contiene `package.json`, ejecuta:
 
-```text
+```sh
 npm ci
 npm run preparar
-npm run check
 npm run build
-npm run db:local
 npm start
 ```
 
-Abre http://127.0.0.1:8787. Mantén abierto el servidor. En otra consola, `npm run datos:demo` agrega seis solicitudes de ejemplo sin duplicarlas. Los datos locales se conservan en `.wrangler/state`; no se pierden al cerrar el navegador.
+Abre **http://127.0.0.1:3000**. Las cuentas son `admin@stt.test` y `tecnico@stt.test`. Al preparar una instalación desde el ZIP se toman las dos contraseñas de `Acceso.txt`. Un clon independiente genera contraseñas en el archivo local `.env`. El secreto de firma se crea de forma independiente en cada instalación. Una segunda ejecución conserva el archivo existente.
 
-`preparar` crea `.dev.vars` con una clave JWT y una contraseña aleatoria para esta copia. Muestra la contraseña inicial en la consola. No sobrescribe una configuración que ya existe. El archivo de ejemplo `.dev.vars.example` documenta las variables y no contiene claves de producción.
+Para el modo local se usa PGlite, una distribución embebida de PostgreSQL que guarda los datos en `data/stt`. Para usar un servidor PostgreSQL, agrega `DATABASE_URL` a `.env` con la cadena de tu base dedicada. La primera ejecución crea tablas, cuentas y solicitudes de muestra de forma transaccional. La siembra conserva cambios y eliminaciones en reinicios posteriores.
 
-| Cuenta | Permisos |
-| --- | --- |
-| admin@stt.test | Consultar, crear, modificar, eliminar y ver actividad |
-| tecnico@stt.test | Consultar, crear, modificar y ver actividad |
+## Operación y permisos
 
-Ambas cuentas utilizan la contraseña inicial configurada en `DEMO_PASSWORD`. Se crean cuando se inicia sesión por primera vez. Los clientes se identifican mediante códigos con el formato CLI-001. Los registros incluidos en la entrega académica utilizan datos ficticios.
-
-## Organización
-
-| Carpeta o archivo | Responsabilidad |
-| --- | --- |
-| frontend | Interfaz React, formularios, filtros y estilos |
-| backend/controllers | Controladores de autenticación y CRUD |
-| backend/middleware | Validación de sesión y permisos |
-| backend/models | Modelo de solicitud y validaciones |
-| backend/lib y backend/router.ts | JWT, contraseñas, respuestas y rutas REST |
-| worker/index.ts | Entrada del servidor y conexión con los archivos del frontend |
-| migrations | Esquema SQL y migraciones de D1 |
-| scripts | Preparación y carga de registros iniciales |
-| wrangler.jsonc | Configuración de Cloudflare y enlace de la base DB |
-
-El frontend envía peticiones Fetch al backend del mismo dominio. El servidor verifica la cookie JWT y el rol de la cuenta antes de ejecutar sentencias SQL con parámetros. Los cambios se agrupan con su registro de actividad mediante transacciones por lote de D1. Las fechas se guardan en ISO UTC y se muestran en horario de Ciudad de México.
-
-## API REST
-
-| Método | Ruta | Operación |
+| Función | Técnico | Administrador |
 | --- | --- | --- |
-| GET | /api/salud | Comprobar el servidor y la conexión |
-| POST | /api/auth/login | Iniciar sesión |
-| GET | /api/auth/me | Consultar la cuenta actual |
-| POST | /api/auth/logout | Revocar la sesión |
-| GET | /api/solicitudes | Listar o buscar por q, estado y categoria |
-| POST | /api/solicitudes | Crear una solicitud |
-| GET | /api/solicitudes/:id | Consultar el detalle |
-| PUT | /api/solicitudes/:id | Modificar con la versión vigente |
-| DELETE | /api/solicitudes/:id | Eliminar con la versión vigente, solo administrador |
-| GET | /api/resumen | Obtener contadores |
-| GET | /api/actividad | Obtener las últimas 50 acciones |
+| Consultar, filtrar y paginar solicitudes | Sí | Sí |
+| Registrar, abrir y modificar casos | Sí | Sí |
+| Consultar el clima de Villahermosa y el resumen | Sí | Sí |
+| Consultar actividad y eliminar solicitudes | — | Sí |
 
-Una solicitud contiene cliente, título, descripción, categoría, prioridad y estado. El servidor genera su ID, folio, fechas y versión. PUT recibe todos los campos y `version`; DELETE recibe `{ "version": 1 }` con la versión vigente. El listado tiene un máximo de 500 registros por consulta, ordenados del más reciente al más antiguo. Una edición desactualizada devuelve 409.
+React Router resuelve el detalle por `/solicitudes/:id` y la edición por `/solicitudes/:id/editar`. El servidor entrega la misma aplicación al recargar un enlace de detalle. La interfaz recupera la sesión con `GET /api/auth/me`; la cookie HttpOnly contiene un JWT y el servidor verifica que la sesión continúe vigente.
 
-## Seguridad y validaciones
+## Estructura
 
-JWT HS256 firmado mediante Web Crypto con vigencia de una hora. Se verifican firma, algoritmo, emisor, audiencia, sujeto, vencimiento y sesión registrada. La cookie es HttpOnly, SameSite Strict y Secure sobre HTTPS. El token no se guarda en localStorage ni se devuelve en el JSON de acceso. Al salir se revoca la sesión en la base de datos.
+| Ruta | Contenido |
+| --- | --- |
+| `frontend/` | Interfaz React, cliente HTTP, navegación y estilos responsivos. |
+| `backend/app.js`, `server.js` | Rutas Express y arranque del servidor. |
+| `backend/auth.js`, `validation.js`, `errors.js` | Sesiones, permisos, validación y respuestas de error. |
+| `backend/schema.sql`, `demo.sql`, `db.js` | Persistencia, datos de muestra y transacciones. |
+| `backend/weather.js` | Consulta a Open-Meteo y validación de su respuesta. |
+| `tests/`, `postman/` | Suite automatizada y colección para recorrer la API. |
+| `render.yaml` | Configuración de producción con un servicio Node y PostgreSQL. |
 
-Las contraseñas se derivan mediante PBKDF2 SHA-256 con 100000 iteraciones y una sal aleatoria por cuenta. Las mutaciones requieren JSON, limitan el tamaño de la entrada y rechazan orígenes web diferentes. El backend aplica los permisos incluso ante peticiones enviadas directamente a la API. Cinco errores de contraseña limitan temporalmente el acceso de esa combinación de IP y usuario.
+## API
 
-## Publicación directa en Cloudflare
+| Método | Ruta | Uso |
+| --- | --- | --- |
+| GET | /api/salud | Verificar que el servidor pueda consultar la base. |
+| POST | /api/auth/login | Iniciar sesión con usuario y password. |
+| GET | /api/auth/me | Consultar la cuenta y el rol actual. |
+| POST | /api/auth/logout | Revocar la sesión. |
+| GET | /api/solicitudes | Consultar por q, estado, categoria, prioridad, pagina y limite. |
+| POST | /api/solicitudes | Crear un caso y devolver su folio. |
+| GET | /api/solicitudes/:id | Abrir el detalle. |
+| PUT | /api/solicitudes/:id | Guardar los campos y la versión leída. |
+| DELETE | /api/solicitudes/:id | Eliminar como administrador indicando la versión leída. |
+| GET | /api/resumen | Consultar contadores generales. |
+| GET | /api/actividad | Consultar los movimientos recientes como administrador. |
+| GET | /api/clima | Obtener las condiciones del tiempo para la visita. |
 
-Se necesita una cuenta de Cloudflare con Workers y D1 habilitados. La autorización se realiza con `npm run cloudflare:login`. La base alojada se crea una sola vez y su identificador se coloca en `wrangler.jsonc`. Las migraciones de producción se aplican con `npm run db:remote`.
+Ejemplo: `GET /api/solicitudes?estado=Pendiente&pagina=1&limite=5`. El resultado incluye `solicitudes` y `paginacion` (página, límite, total y total de páginas). Un caso se captura con `cliente`, `titulo`, `descripcion`, `categoria`, `prioridad` y `estado`. La edición y la eliminación requieren el último valor de `version`. Ante un conflicto se devuelve HTTP 409.
 
-Las variables `JWT_SECRET` y `DEMO_PASSWORD` se cargan como secretos de Cloudflare. Nunca se guardan sus valores en GitHub. `npm run deploy` verifica, compila y publica la aplicación. El resultado muestra la dirección real bajo workers.dev. No es necesario comprar un dominio. La base local y la de producción son independientes.
+La consulta de clima usa `fetch` desde Express a la API pública de Open-Meteo. Envía las coordenadas de Villahermosa y solicita temperatura, sensación térmica, precipitación y código meteorológico. Verifica la lectura, unidades y zona horaria. La caché de diez minutos evita repetir consultas simultáneas. Si el proveedor rechaza la consulta o tarda más de ocho segundos, el usuario puede reintentar desde la pantalla de clima.
 
-## Evidencias de la entrega
+## Pruebas y depuración
 
-El documento Word, las capturas y el video se entregan en la carpeta comprimida académica. La demostración muestra el inicio de sesión, el alta, la consulta, la modificación, la eliminación y la actividad reciente. También incluye las respuestas HTTP obtenidas durante el recorrido del frontend y una vista en móvil. El código del repositorio no incluye contraseñas de producción ni bases de datos con sesiones activas.
+```sh
+npm test
+npm run check
+npm run debug
+```
 
-## Referencias
+El inspector escucha en 127.0.0.1:9229. Se puede adjuntar un depurador de Node o Chrome DevTools para observar las validaciones. Con `NODE_DEBUG=stt` el middleware registra método, ruta y estado de errores.
 
-- https://developers.cloudflare.com/d1/worker-api/prepared-statements/
-- https://developers.cloudflare.com/workers/static-assets/
-- https://datatracker.ietf.org/doc/html/rfc7519
-- https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveBits
+En Postman importa los dos JSON de `postman/` y selecciona **STT local**. Configura `baseUrl`, `adminPassword` y `techPassword` con los valores de la instalación. Ejecuta la colección en orden y habilita el manejo de cookies. El recorrido crea un caso propio y lo elimina al finalizar. La lectura meteorológica requiere conexión a Open-Meteo.
+
+## Despliegue en Render
+
+La rama `entrega-final` contiene `render.yaml`. En Render, crea un Blueprint desde esta rama, selecciona los planes gratuitos indicados y captura `ADMIN_PASSWORD` y `TECH_PASSWORD` como variables privadas. Render genera `JWT_SECRET` y enlaza `DATABASE_URL` con PostgreSQL. El servicio ejecuta `npm ci --include=dev && npm run build` y después `npm start`. Comprueba `/api/salud` y ambos accesos en la URL que asigne Render.
+
+[Configurar el Blueprint en Render](https://render.com/deploy?repo=https://github.com/gabrielmaylara-hub/Avance-FullStack-STT/tree/entrega-final) · [Documentación de Open-Meteo](https://open-meteo.com/en/docs)

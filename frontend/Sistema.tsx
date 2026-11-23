@@ -1,51 +1,126 @@
-"use client";
-import { useState,useEffect,useCallback,useRef,type FormEvent } from "react";
-import {Activity,ArrowRight,Check,CheckCircle2,Clock3,Edit3,FileText,LayoutGrid,LogOut,Monitor,Plus,RefreshCw,Search,Trash2,Wifi,Wrench,X,AlertTriangle,CircleHelp} from "lucide-react";
-type User={id:string;usuario:string;nombre:string;rol:string};
-type Item={id:number;folio:string;cliente:string;titulo:string;descripcion:string;categoria:string;prioridad:string;estado:string;creado:string;actualizado:string;version:number};
-type Event={id:number;folio:string;accion:string;detalle:string;nombre:string;fecha:string};
-type Summary={total:number;pendientes:number;proceso:number;resueltas:number;prioritarias:number};
-const empty={cliente:"",titulo:"",descripcion:"",categoria:"Soporte",prioridad:"Media",estado:"Pendiente"};
-const categories=["Mantenimiento","Soporte","Redes"],priorities=["Baja","Media","Alta","Crítica"],statuses=["Pendiente","En proceso","Resuelta"];
-const date=(v:string)=>new Date(v).toLocaleDateString("es-MX",{day:"2-digit",month:"short",timeZone:"America/Mexico_City"});
-const time=(v:string)=>new Date(v).toLocaleString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",timeZone:"America/Mexico_City"});
-class HttpError extends Error{constructor(public status:number,message:string){super(message)}}
-type ResponseData={usuario:User;solicitudes:Item[];resumen:Summary;actividad:Event[];error?:string};
-async function api(path:string,options:RequestInit={}){const r=await fetch(`/api${path}`,{credentials:"same-origin",...options,headers:{"Content-Type":"application/json",...options.headers}});const d=await r.json() as ResponseData;if(!r.ok)throw new HttpError(r.status,d.error||"No fue posible completar la operación.");return d}
-function Mark(){return <span className="brand-mark">stt<span>·</span></span>}
-function Badge({value,priority=false}:{value:string;priority?:boolean}){const c=priority?(value==="Crítica"?"critical":value==="Alta"?"high":"low"):(value==="Resuelta"?"done":value==="En proceso"?"progress":"pending");return <span className={`badge ${c}`}><i/>{value}</span>}
-function Modal({title,subtitle,children,onClose}:{title:string;subtitle?:string;children:React.ReactNode;onClose:()=>void}){
- const ref=useRef<HTMLDivElement>(null);
- useEffect(()=>{const previous=document.activeElement as HTMLElement;const els=()=>[...(ref.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input,select,textarea')??[])];els()[1]?.focus();const key=(e:KeyboardEvent)=>{if(e.key==="Escape")onClose();if(e.key==="Tab"){const a=els();if(e.shiftKey&&document.activeElement===a[0]){e.preventDefault();a.at(-1)?.focus()}else if(!e.shiftKey&&document.activeElement===a.at(-1)){e.preventDefault();a[0]?.focus()}}};document.addEventListener("keydown",key);document.body.style.overflow="hidden";return()=>{document.removeEventListener("keydown",key);document.body.style.overflow="";previous?.focus()}},[onClose]);
- return <div className="modal-backdrop"><div className="modal" ref={ref} role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><h2 id="modal-title">{title}</h2>{subtitle&&<p>{subtitle}</p>}</div><button className="icon-btn" onClick={onClose} aria-label="Cerrar ventana"><X size={21}/></button></div>{children}</div></div>
+import { useEffect, useState, type FormEvent } from "react";
+import { Activity, ArrowRight, CheckCircle2, CircleHelp, CloudSun, LayoutGrid, LogOut, X } from "lucide-react";
+import { BrowserRouter, Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { api, ErrorApi, mensaje, type Usuario } from "./datos";
+import { AvisoError, Cargando, Marca } from "./ui";
+import Caso from "./Caso";
+import Solicitudes from "./Solicitudes";
+import { Actividad, ClimaVisitas, Guia, SinAcceso } from "./Secciones";
+
+function Ingreso({ autenticar, vencida }: { autenticar: (usuario: Usuario) => void; vencida: boolean }) {
+  const [error, informar] = useState("");
+  const [ocupado, trabajar] = useState(false);
+  async function ingresar(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (ocupado) return;
+    const form = new FormData(e.currentTarget);
+    informar(""); trabajar(true);
+    try {
+      const res = await api<{ usuario: Usuario }>("/auth/login", {
+        method: "POST", body: JSON.stringify({ usuario: String(form.get("usuario")).trim(), password: form.get("password") })
+      });
+      autenticar(res.usuario);
+    } catch (err) { informar(mensaje(err)); } finally { trabajar(false); }
+  }
+  return <main className="ingreso">
+    <section className="ingreso-portada"><Marca/><div className="ingreso-titulo"><h1>Centro de<br/><span>soporte.</span></h1>
+      <p>Atención y seguimiento de solicitudes de mantenimiento, soporte técnico y redes.</p></div>
+      <span className="ingreso-sede">Soluciones Tecnológicas de Tabasco</span></section>
+    <section className="ingreso-form"><div><h2>Inicia sesión</h2><p>Ingresa a tu espacio de gestión de solicitudes.</p>
+      <form onSubmit={ingresar}><label>Usuario<input type="email" name="usuario" autoComplete="username" placeholder="usuario@stt.test" required maxLength={100}/></label>
+        <label>Contraseña<input type="password" name="password" autoComplete="current-password" required maxLength={200}/></label>
+        {vencida && !error && <p className="aviso-sesion" role="status">Tu sesión terminó. Ingresa para continuar.</p>}
+        {error && <AvisoError error={error}/>}
+        <button className="boton primario" disabled={ocupado}>{ocupado ? "Ingresando…" : "Entrar al sistema"}<ArrowRight size={17}/></button>
+      </form></div></section>
+  </main>;
 }
-export default function Sistema(){
- const[user,setUser]=useState<User|null>(null),[ready,setReady]=useState(false),[loginUser,setLoginUser]=useState("admin@stt.test"),[password,setPassword]=useState("");
- const[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false),[view,setView]=useState("solicitudes");
- const[items,setItems]=useState<Item[]>([]),[events,setEvents]=useState<Event[]>([]),[summary,setSummary]=useState<Summary>({total:0,pendientes:0,proceso:0,resueltas:0,prioritarias:0});
- const[search,setSearch]=useState(""),[status,setStatus]=useState(""),[category,setCategory]=useState("");
- const[modal,setModal]=useState<"create"|"edit"|"detail"|"delete"|null>(null),[selected,setSelected]=useState<Item|null>(null),[form,setForm]=useState(empty),[formError,setFormError]=useState("");
- const close=useCallback(()=>{setModal(null);setFormError("")},[]);
- const handleError=useCallback((e:unknown)=>{if(e instanceof HttpError&&e.status===401)setUser(null);setError(e instanceof Error?e.message:"No fue posible conectar con el servidor.")},[]);
- useEffect(()=>{api("/auth/me").then(d=>setUser(d.usuario)).catch(e=>{if(!(e instanceof HttpError&&e.status===401))handleError(e)}).finally(()=>setReady(true))},[handleError]);
- useEffect(()=>{if(!notice)return;const id=setTimeout(()=>setNotice(""),5500);return()=>clearTimeout(id)},[notice]);
- const load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);try{const p=new URLSearchParams({q:search,estado:status,categoria:category});const[a,b,c]=await Promise.all([api(`/solicitudes?${p}`,{signal}),api("/resumen",{signal}),api("/actividad",{signal})]);setItems(a.solicitudes);setSummary(b.resumen);setEvents(c.actividad);setError("")}catch(e){if(!(e instanceof DOMException&&e.name==="AbortError"))handleError(e)}finally{if(!signal?.aborted)setLoading(false)}},[search,status,category,handleError]);
- useEffect(()=>{if(!user)return;const c=new AbortController(),id=setTimeout(()=>load(c.signal),200);return()=>{clearTimeout(id);c.abort()}},[user,load]);
- async function login(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const d=await api("/auth/login",{method:"POST",body:JSON.stringify({usuario:loginUser,password})});setUser(d.usuario);setPassword("");setNotice("Sesión iniciada correctamente.")}catch(e){handleError(e)}finally{setBusy(false)}}
- async function logout(){setBusy(true);try{await api("/auth/logout",{method:"POST",body:"{}"});setUser(null);setItems([]);setEvents([]);setNotice("");setError("")}catch(e){handleError(e)}finally{setBusy(false)}}
- function open(kind:typeof modal,item?:Item){setSelected(item??null);setFormError("");setForm(item?{cliente:item.cliente,titulo:item.titulo,descripcion:item.descripcion,categoria:item.categoria,prioridad:item.prioridad,estado:item.estado}:empty);setModal(kind)}
- async function save(e:FormEvent){e.preventDefault();setBusy(true);setFormError("");try{const edit=modal==="edit"&&selected;await api(edit?`/solicitudes/${selected!.id}`:"/solicitudes",{method:edit?"PUT":"POST",body:JSON.stringify({...form,...(edit?{version:selected!.version}:{})})});close();setNotice(edit?"Cambios guardados.":"Solicitud registrada correctamente.");await load()}catch(e){if(e instanceof HttpError&&e.status===401){close();handleError(e)}else setFormError(e instanceof Error?e.message:"No se pudo guardar.")}finally{setBusy(false)}}
- async function remove(){if(!selected)return;setBusy(true);try{await api(`/solicitudes/${selected.id}`,{method:"DELETE",body:JSON.stringify({version:selected.version})});close();setNotice("Solicitud eliminada. La acción quedó en la actividad.");await load()}catch(e){if(e instanceof HttpError&&e.status===401){close();handleError(e)}else setFormError(e instanceof Error?e.message:"No se pudo eliminar.")}finally{setBusy(false)}}
- if(!ready)return <main className="initial-loading"><Mark/><p>Abriendo tu espacio de trabajo…</p></main>;
- if(!user)return <main className="login-layout"><section className="login-story"><div className="brand"><Mark/><div>Soluciones Tecnológicas<br/><strong>de Tabasco</strong></div></div><div className="login-copy"><span className="eyebrow light">CENTRO DE SOPORTE</span><h1>Atención y seguimiento<br/><em>de solicitudes.</em></h1><p>Registra, organiza y da seguimiento a las solicitudes de mantenimiento, soporte y redes desde un solo lugar.</p><div className="login-features"><span><LayoutGrid size={18}/>Solicitudes organizadas</span><span><Activity size={18}/>Historial de atención</span></div></div><p className="login-company">Soluciones Tecnológicas de Tabasco · 2026</p><div className="orbit"/><div className="orbit outer"/></section><section className="login-form-wrap"><div className="login-form"><span className="eyebrow">BIENVENIDO A STT</span><h2>Inicia sesión</h2><p className="muted">Entra a tu espacio de gestión de solicitudes.</p><form onSubmit={login}><label htmlFor="usuario">Usuario</label><input id="usuario" type="email" autoComplete="username" value={loginUser} onChange={e=>setLoginUser(e.target.value)} required maxLength={100}/><label htmlFor="password">Contraseña</label><input id="password" type="password" autoComplete="current-password" placeholder="Escribe tu contraseña" value={password} onChange={e=>setPassword(e.target.value)} required maxLength={200}/>{error&&<p className="error-box" role="alert">{error}</p>}<button className="btn primary login-submit" disabled={busy}>{busy?"Ingresando…":"Entrar al sistema"}<ArrowRight size={18}/></button></form><p className="login-footer">Soporte · Mantenimiento · Redes</p></div></section></main>;
- const title=view==="solicitudes"?"Solicitudes":view==="actividad"?"Actividad reciente":"Guía del sistema";
- return <div className="app-layout"><a className="skip-link" href="#principal">Saltar al contenido</a><aside className="sidebar"><div className="brand"><Mark/><div>Soluciones Tecnológicas<br/><strong>de Tabasco</strong></div></div><div className="workspace-label">ESPACIO DE TRABAJO</div><nav aria-label="Navegación principal"><button className={`nav-item ${view==="solicitudes"?"active":""}`} onClick={()=>setView("solicitudes")}><LayoutGrid size={19}/>Solicitudes<span className="nav-count">{summary.total??0}</span></button><button className={`nav-item ${view==="actividad"?"active":""}`} onClick={()=>setView("actividad")}><Activity size={19}/>Actividad reciente</button><button className={`nav-item ${view==="ayuda"?"active":""}`} onClick={()=>setView("ayuda")}><CircleHelp size={19}/>Guía del sistema</button></nav><div className="sidebar-bottom"><div className="user-block"><span className="avatar">{user.rol==="administrador"?"AD":"TS"}</span><div><strong>{user.nombre}</strong><small>{user.rol==="administrador"?"Administrador":"Técnico"}</small></div><button className="icon-btn logout" onClick={logout} disabled={busy} aria-label="Cerrar sesión"><LogOut size={18}/></button></div></div></aside><div className="main-wrap"><header className="topbar"><div><span>Mi espacio</span><i>/</i><strong>{title}</strong></div><button className="mobile-logout icon-btn" onClick={logout} aria-label="Cerrar sesión móvil"><LogOut size={17}/></button></header><main id="principal" className="main-content"><div className="page-heading"><div><span className="eyebrow">GESTIÓN DE SOPORTE</span><h1>{title}</h1><p>{view==="solicitudes"?"Consulta solicitudes y organiza la atención del equipo.":view==="actividad"?"Consulta los últimos movimientos del equipo.":"Consulta cómo registrar, actualizar y dar seguimiento a los casos."}</p></div>{view==="solicitudes"&&<button className="btn primary" onClick={()=>open("create")}><Plus size={18}/>Nueva solicitud</button>}</div>{error&&<p className="error-box" role="alert">{error}<button className="text-button" onClick={()=>load()}>Reintentar</button></p>}
- {view==="solicitudes"&&<><section className="stats" aria-label="Resumen de solicitudes">{[{label:"Total de solicitudes",value:summary.total,icon:<FileText size={20}/>,hint:"Registradas en el sistema",cls:""},{label:"Pendientes",value:summary.pendientes,icon:<Clock3 size={20}/>,hint:"Por comenzar a atender",cls:"amber"},{label:"En proceso",value:summary.proceso,icon:<RefreshCw size={20}/>,hint:"Con atención en curso",cls:"mint"},{label:"Resueltas",value:summary.resueltas,icon:<CheckCircle2 size={20}/>,hint:"Atención finalizada",cls:"green"}].map(s=><div className="stat" key={s.label}><div className="stat-top"><span>{s.label}</span><span className={`stat-icon ${s.cls}`}>{s.icon}</span></div><strong>{s.value??0}</strong><p>{s.hint}</p></div>)}</section><section className="records-panel" aria-label="Listado de solicitudes"><div className="panel-heading"><div><h2>Registro de solicitudes <span>{summary.total??0}</span></h2><p>Consulta y administra cada caso de soporte.</p></div><button className="icon-btn" aria-label="Actualizar lista" onClick={()=>load()} disabled={loading}><RefreshCw size={18} className={loading?"spinning":""}/></button></div><div className="tabs" role="group" aria-label="Filtrar por estado">{[{label:"Todas",value:""},...statuses.map(s=>({label:s,value:s}))].map(t=><button className={`tab ${status===t.value?"active":""}`} key={t.value} onClick={()=>setStatus(t.value)}>{t.label}</button>)}</div><div className="filters"><div className="search-field"><Search size={18}/><input aria-label="Buscar solicitudes" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por folio, título o cliente…" maxLength={120}/>{search&&<button className="icon-btn" onClick={()=>setSearch("")} aria-label="Limpiar búsqueda"><X size={16}/></button>}</div><select aria-label="Filtrar por categoría" value={category} onChange={e=>setCategory(e.target.value)}><option value="">Todas las categorías</option>{categories.map(c=><option key={c}>{c}</option>)}</select></div><div className="table-scroll"><table className="requests-table"><thead><tr><th>Solicitud</th><th>Cliente</th><th>Prioridad</th><th>Estado</th><th>Registro</th><th><span className="sr-only">Acciones</span></th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><div className="request-cell"><span className="category-icon">{item.categoria==="Redes"?<Wifi size={20}/>:item.categoria==="Mantenimiento"?<Wrench size={20}/>:<Monitor size={20}/>}</span><div><button className="request-title" onClick={()=>open("detail",item)}>{item.titulo}</button><span className="request-meta">{item.folio}<span>·</span>{item.categoria}</span></div></div></td><td className="client-code">{item.cliente}</td><td><Badge value={item.prioridad} priority/></td><td><Badge value={item.estado}/></td><td className="date-cell">{date(item.creado)}</td><td><div className="row-actions"><button className="icon-btn" onClick={()=>open("edit",item)} aria-label={`Editar ${item.folio}`}><Edit3 size={16}/></button>{user.rol==="administrador"&&<button className="icon-btn danger-icon" onClick={()=>open("delete",item)} aria-label={`Eliminar ${item.folio}`}><Trash2 size={16}/></button>}</div></td></tr>)}</tbody></table></div>{!items.length&&<div className="empty-state"><span><Search size={26}/></span><h3>{search||status||category?"No encontramos solicitudes":"Tu primera solicitud comienza aquí"}</h3><p>{search||status||category?"Busca otro folio o ajusta los filtros.":"Registra un caso de soporte para empezar a darle seguimiento."}</p>{!search&&!status&&!category&&<button className="btn secondary" onClick={()=>open("create")}><Plus size={16}/>Crear solicitud</button>}</div>}<div className="panel-footer"><span>{loading?"Actualizando…":`${items.length} solicitud${items.length===1?"":"es"} en esta vista`}</span><span>Más recientes primero · Máximo 500 por consulta</span></div></section><div className="below-panel"><span><CircleHelp size={15}/>Selecciona el título de una solicitud para ver sus detalles.</span><span>{summary.prioritarias??0} casos de prioridad alta o crítica por atender</span></div></>}
- {view==="actividad"&&<section className="activity-panel"><div className="panel-heading"><div><h2>Últimos movimientos</h2><p>Hasta 50 acciones, comenzando por la más reciente.</p></div><button className="icon-btn" onClick={()=>load()} aria-label="Actualizar actividad"><RefreshCw size={18}/></button></div>{!events.length?<div className="empty-state"><Activity size={30}/><h3>Aún no hay movimientos</h3><p>Las altas, cambios y eliminaciones aparecerán aquí.</p></div>:<ol className="timeline">{events.map(e=><li key={e.id}><span className={`event-icon ${e.accion==="Eliminación"?"removed":""}`}>{e.accion==="Creación"?<Plus size={17}/>:e.accion==="Eliminación"?<Trash2 size={17}/>:<Edit3 size={17}/>}</span><div><strong>{e.accion} de {e.folio}</strong><p>{e.detalle}</p><small>{e.nombre} · {time(e.fecha)}</small></div></li>)}</ol>}</section>}
- {view==="ayuda"&&<section className="help-panel"><div className="help-intro"><FileText size={30}/><h2>Organiza la atención de cada solicitud</h2><p>Registra los servicios de mantenimiento, soporte y redes. Consulta su avance y mantén al día la información de cada caso.</p></div><div className="help-grid">{[{title:"1. Registra",text:"Selecciona Nueva solicitud y completa el cliente, título, descripción, categoría, prioridad y estado."},{title:"2. Da seguimiento",text:"Busca por folio o cliente y filtra por estado o categoría. Abre el título de una solicitud para consultar sus detalles."},{title:"3. Actualiza",text:"Usa el lápiz para cambiar los datos o mover un caso de Pendiente a En proceso o Resuelta."},{title:"4. Revisa la actividad",text:"Consulta quién registró, modificó o eliminó una solicitud. Solo el administrador puede eliminar; el técnico puede consultar, crear y editar."}].map(h=><div key={h.title}><h3>{h.title}</h3><p>{h.text}</p></div>)}</div><div className="help-note"><strong>Identifica el servicio por su categoría</strong><p>Mantenimiento utiliza una herramienta; Soporte, un monitor; y Redes, el símbolo de Wi-Fi. Al cambiar la categoría de una solicitud, su icono se actualiza.</p></div></section>}
- <footer className="main-footer"><span>Soluciones Tecnológicas de Tabasco</span><span>Gestión de solicitudes</span></footer></main></div>{notice&&<div className="toast" role="status"><CheckCircle2 size={20}/><span>{notice}</span><button className="icon-btn" onClick={()=>setNotice("")} aria-label="Cerrar aviso"><X size={16}/></button></div>}
- {(modal==="create"||modal==="edit")&&<Modal title={modal==="edit"?"Editar solicitud":"Nueva solicitud"} subtitle={modal==="edit"?`${selected?.folio} · Actualiza la información del caso.`:"Completa los datos para comenzar el seguimiento."} onClose={close}><form onSubmit={save} className="request-form"><div className="form-grid"><label>Código de cliente<input value={form.cliente} onChange={e=>setForm({...form,cliente:e.target.value})} placeholder="CLI-001" required pattern="[Cc][Ll][Ii]-[0-9]{3,8}" maxLength={12}/><small>Ejemplo: CLI-001</small></label><label>Categoría<select value={form.categoria} onChange={e=>setForm({...form,categoria:e.target.value})}>{categories.map(c=><option key={c}>{c}</option>)}</select></label></div><label>Título de la solicitud<input value={form.titulo} onChange={e=>setForm({...form,titulo:e.target.value})} placeholder="Ej. Mantenimiento preventivo de equipo" required minLength={3} maxLength={120}/></label><label>Descripción<textarea value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})} placeholder="Describe la situación y el servicio requerido…" required minLength={10} maxLength={1000} rows={4}/></label><div className="form-grid"><label>Prioridad<select value={form.prioridad} onChange={e=>setForm({...form,prioridad:e.target.value})}>{priorities.map(p=><option key={p}>{p}</option>)}</select></label><label>Estado<select value={form.estado} onChange={e=>setForm({...form,estado:e.target.value})}>{statuses.map(s=><option key={s}>{s}</option>)}</select></label></div>{formError&&<p className="error-box" role="alert">{formError}</p>}<div className="modal-actions"><button type="button" className="btn secondary" onClick={close}>Cancelar</button><button className="btn primary" disabled={busy}><Check size={17}/>{busy?"Guardando…":modal==="edit"?"Guardar cambios":"Registrar solicitud"}</button></div></form></Modal>}
- {modal==="detail"&&selected&&<Modal title={selected.titulo} subtitle={`${selected.folio} · ${selected.cliente}`} onClose={close}><div className="detail-content"><div className="detail-badges"><Badge value={selected.estado}/><Badge value={selected.prioridad} priority/></div><h3>Descripción del caso</h3><p className="description">{selected.descripcion}</p><dl><div><dt>Categoría</dt><dd>{selected.categoria}</dd></div><div><dt>Fecha de registro</dt><dd>{time(selected.creado)}</dd></div><div><dt>Última actualización</dt><dd>{time(selected.actualizado)}</dd></div></dl><div className="modal-actions"><button className="btn secondary" onClick={close}>Cerrar</button><button className="btn primary" onClick={()=>open("edit",selected)}><Edit3 size={16}/>Editar solicitud</button></div></div></Modal>}
- {modal==="delete"&&selected&&<Modal title="Eliminar solicitud" subtitle={selected.folio} onClose={close}><div className="delete-content"><div className="delete-warning"><AlertTriangle size={22}/><p>Se eliminará <strong>{selected.titulo}</strong>. Esta acción no se puede deshacer y quedará registrada en la actividad.</p></div>{formError&&<p className="error-box" role="alert">{formError}</p>}<div className="modal-actions"><button className="btn secondary" onClick={close}>Cancelar</button><button className="btn danger" disabled={busy} onClick={remove}>{busy?"Eliminando…":"Sí, eliminar solicitud"}</button></div></div></Modal>}
- </div>
+const menu = [
+  { to: "/solicitudes", titulo: "Solicitudes", icono: LayoutGrid },
+  { to: "/actividad", titulo: "Actividad reciente", icono: Activity },
+  { to: "/clima", titulo: "Clima para visitas", icono: CloudSun },
+  { to: "/guia", titulo: "Guía del sistema", icono: CircleHelp }
+];
+function Espacio({ usuario, salir }: { usuario: Usuario; salir: () => void }) {
+  const location = useLocation();
+  const nav = useNavigate();
+  const [ocupado, trabajar] = useState(false);
+  const [error, informar] = useState("");
+  const [aviso, avisar] = useState("");
+  const pagina = menu.find(link => location.pathname.startsWith(link.to))?.titulo || "Mi espacio";
+  useEffect(() => {
+    const texto = location.state?.aviso;
+    if (typeof texto !== "string") return;
+    avisar(texto);
+    const { aviso: _mensaje, ...resto } = location.state;
+    nav(location.pathname + location.search, { replace: true, state: resto });
+  }, [location, nav]);
+  useEffect(() => {
+    if (!aviso) return;
+    const temporizador = window.setTimeout(() => avisar(""), 5200);
+    return () => window.clearTimeout(temporizador);
+  }, [aviso]);
+  useEffect(() => { document.title = pagina + " | STT"; }, [pagina]);
+  async function cerrar() {
+    if (ocupado) return;
+    trabajar(true);
+    try {
+      await api("/auth/logout", { method: "POST", body: "{}" });
+      nav("/ingreso", { replace: true }); salir();
+    } catch (err) { informar(mensaje(err)); } finally { trabajar(false); }
+  }
+  const rol = usuario.rol === "administrador" ? "Administrador" : "Técnico";
+  return <div className="aplicacion"><a className="saltar" href="#principal">Saltar al contenido</a>
+    <aside className="lateral"><Link className="marca-enlace" to="/solicitudes" aria-label="STT, ir a solicitudes"><Marca/></Link>
+      <nav aria-label="Navegación principal">{menu.filter(link => link.to !== "/actividad" || usuario.rol === "administrador").map(({ to, titulo, icono: Icono }) => <NavLink key={to} to={to}><Icono size={18}/><span>{titulo}</span></NavLink>)}</nav>
+      <div className="identidad"><span className="avatar">{usuario.nombre.split(" ").filter(Boolean).slice(0,2).map(n => n[0]).join("")}</span>
+        <div><strong>{usuario.nombre}</strong><small>{rol}</small></div><button className="icon-button" onClick={cerrar} disabled={ocupado} aria-label="Cerrar sesión"><LogOut size={18}/></button></div>
+    </aside>
+    <div className="cuerpo"><header className="barra"><div><span>Mi espacio</span><i>/</i>{pagina}</div>
+      <span className="nombre-movil">{rol}</span><button className="icon-button salida-movil" onClick={cerrar} disabled={ocupado} aria-label="Cerrar sesión"><LogOut size={17}/></button></header>
+      <main id="principal" className="contenido" tabIndex={-1}>{error && <AvisoError error={error} reintentar={cerrar}/>}<Outlet/></main>
+    </div>
+    {aviso && <div role="status" className="notificacion"><CheckCircle2 size={18}/>{aviso}<button aria-label="Cerrar aviso" onClick={() => avisar("")}><X size={15}/></button></div>}
+  </div>;
+}
+function Aplicacion() {
+  const [usuario, autenticar] = useState<Usuario | null>(null);
+  const [listo, preparar] = useState(false);
+  const [error, informar] = useState("");
+  const [revision, reintentar] = useState(0);
+  const [vencida, caducar] = useState(false);
+  const location = useLocation();
+  useEffect(() => {
+    const controlador = new AbortController();
+    api<{ usuario: Usuario }>("/auth/me", { signal: controlador.signal }).then(d => { if (!controlador.signal.aborted) autenticar(d.usuario); })
+      .catch(e => { if (!controlador.signal.aborted && !(e instanceof ErrorApi && e.status === 401)) informar(mensaje(e)); })
+      .finally(() => { if (!controlador.signal.aborted) preparar(true); });
+    return () => controlador.abort();
+  }, [revision]);
+  useEffect(() => {
+    const finalizar = () => { autenticar(null); caducar(true); };
+    window.addEventListener("stt:sesion-vencida", finalizar);
+    return () => window.removeEventListener("stt:sesion-vencida", finalizar);
+  }, []);
+  if (error) return <main className="espera"><Marca/><AvisoError error={error} reintentar={() => { informar(""); preparar(false); reintentar(n => n + 1); }}/></main>;
+  if (!listo) return <main className="espera"><Marca/><Cargando texto="Abriendo el sistema…"/></main>;
+  const regreso = location.state?.regreso;
+  const destino = typeof regreso === "string" && /^\/(solicitudes|actividad|clima|guia)(\/|\?|$)/.test(regreso) ? regreso : "/solicitudes";
+  return <Routes>
+    <Route path="/ingreso" element={usuario ? <Navigate to={destino} replace/> : <Ingreso vencida={vencida} autenticar={u => { caducar(false); autenticar(u); }}/>}/>
+    <Route element={usuario ? <Espacio usuario={usuario} salir={() => { caducar(false); autenticar(null); }}/> :
+      <Navigate to="/ingreso" replace state={{ regreso: location.pathname + location.search }}/>}>
+      <Route index element={<Navigate to="/solicitudes" replace/>}/>
+      <Route path="/solicitudes" element={<Solicitudes/>}/>
+      <Route path="/solicitudes/nueva" element={usuario && <Caso key="nuevo" modo="nuevo" usuario={usuario}/>}/>
+      <Route path="/solicitudes/:id" element={usuario && <Caso key="detalle" modo="detalle" usuario={usuario}/>}/>
+      <Route path="/solicitudes/:id/editar" element={usuario && <Caso key="editar" modo="editar" usuario={usuario}/>}/>
+      <Route path="/actividad" element={usuario?.rol === "administrador" ? <Actividad/> : <SinAcceso/>}/>
+      <Route path="/clima" element={<ClimaVisitas/>}/>
+      <Route path="/guia" element={usuario && <Guia usuario={usuario}/>}/>
+      <Route path="*" element={<SinAcceso faltante/>}/>
+    </Route></Routes>;
+}
+export default function Sistema() {
+  return <BrowserRouter><Aplicacion/></BrowserRouter>;
 }
